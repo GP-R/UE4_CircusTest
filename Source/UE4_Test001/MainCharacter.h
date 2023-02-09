@@ -25,7 +25,7 @@ public:
 
 	// Called to bind functionality to input
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
-
+	//virtual void PostInitializeComponents() override;
 	void UpDown(float Value);
 	void LeftRight(float Value);
 	void Turn(float Value);
@@ -37,5 +37,6 @@ public:
 	UPROPERTY(VisibleAnywhere)
 	class UCameraComponent* Camera;
 
-
+	UPROPERTY(VisibleAnywhere)
+	class UWidgetComponent* PlayerUI;
 };

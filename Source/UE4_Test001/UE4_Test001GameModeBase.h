@@ -15,4 +15,6 @@ class UE4_TEST001_API AUE4_Test001GameModeBase : public AGameModeBase
 	GENERATED_BODY()
 
 	AUE4_Test001GameModeBase();
+
+	virtual void BeginPlay() override;
 };

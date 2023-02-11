@@ -30,13 +30,31 @@ public:
 	void LeftRight(float Value);
 	void Turn(float Value);
 	void LookUp(float Value);
-
+	void Interaction();
+	
+public:
 	UPROPERTY(VisibleAnywhere)
 	class USpringArmComponent* SpringArm;
 
 	UPROPERTY(VisibleAnywhere)
 	class UCameraComponent* Camera;
 
+	UPROPERTY(EditAnywhere, Category = "Widget")
+	TSubclassOf<UUserWidget> WidgetClass;
+
 	UPROPERTY(VisibleAnywhere)
-	class UWidgetComponent* PlayerUI;
+	class UMainCharacterWidget* PlayerUI;
+
+	UPROPERTY(VisibleAnywhere)
+	APlayerController* playerController;
+
+	UPROPERTY(VisibleAnywhere)
+	FVector2D ScreenAimPos;
+
+	UPROPERTY(VisibleAnywhere)
+	float InteractionRange;
+
+	UPROPERTY(VisibleAnywhere)
+	class AInteractionObject* InteractionObject;
+
 };

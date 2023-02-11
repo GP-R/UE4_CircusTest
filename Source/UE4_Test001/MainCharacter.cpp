@@ -7,6 +7,12 @@
 #include "Components/CapsuleComponent.h"
 #include "Components/WidgetComponent.h"
 #include "MainCharacterWidget.h"
+#include "Kismet/GameplayStatics.h"
+#include "Engine/World.h"
+#include "DrawDebugHelpers.h"
+#include "GameFramework/Actor.h"
+#include "InteractionObject.h"
+#include "TimerManager.h"
 
 // Sets default values
 AMainCharacter::AMainCharacter()
@@ -19,29 +25,31 @@ AMainCharacter::AMainCharacter()
 
 	SpringArm->SetupAttachment(GetCapsuleComponent());
 	Camera->SetupAttachment(SpringArm);
-
-	SpringArm->TargetArmLength = 500.f;
-	SpringArm->SetRelativeRotation(FRotator(-35.0f, 0.f, 0.f));
+	SpringArm->TargetArmLength = -70.f;
+	SpringArm->SetRelativeLocation(FVector(0.f, 0.f, 90.f));
 	SpringArm->bUsePawnControlRotation = true;
 	GetMesh()->SetRelativeLocationAndRotation(
 		FVector(0.f, 0.f, -88.f), FRotator(0.f, -90.f, 0.f));
 
-	static ConstructorHelpers::FObjectFinder<USkeletalMesh> SM(TEXT("SkeletalMesh'/Game/Mannequin/Character/Mesh/SK_Mannequin.SK_Mannequin'"));
 
+	static ConstructorHelpers::FObjectFinder<USkeletalMesh> SM(TEXT("SkeletalMesh'/Game/Mannequin/Character/Mesh/SK_Mannequin.SK_Mannequin'"));
 	if (SM.Succeeded())
 	{
 		GetMesh()->SetSkeletalMesh(SM.Object);
 	}
 
-	PlayerUI = CreateDefaultSubobject<UWidgetComponent>(TEXT("PLAYERUI"));
-	PlayerUI->SetupAttachment(GetCapsuleComponent());
 
-	PlayerUI->SetWidgetSpace(EWidgetSpace::Screen);
-
-	static ConstructorHelpers::FClassFinder<UUserWidget> UW(TEXT("WidgetBlueprint'/Game/Blueprints/CPPBlueprints/WBP_MainCharacter.WBP_MainCharacter_C'"));
-	if (UW.Succeeded())
+	GetMesh()->SetAnimationMode(EAnimationMode::AnimationBlueprint);
+	static ConstructorHelpers::FClassFinder<UAnimInstance> AnimInstance(TEXT("AnimBlueprint'/Game/Blueprints/CPPBlueprints/ABP_MainCharacter.ABP_MainCharacter_C'"));
+	if (AnimInstance.Succeeded())
 	{
-		PlayerUI->SetWidgetClass(UW.Class);
+		GetMesh()->SetAnimInstanceClass(AnimInstance.Class);
+	}
+
+	static ConstructorHelpers::FClassFinder<UUserWidget> PUI(TEXT("WidgetBlueprint'/Game/Blueprints/CPPBlueprints/WBP_MainCharacter.WBP_MainCharacter_C'"));
+	if (PUI.Succeeded())
+	{
+		WidgetClass = PUI.Class;
 	}
 
 }
@@ -50,13 +58,76 @@ AMainCharacter::AMainCharacter()
 void AMainCharacter::BeginPlay()
 {
 	Super::BeginPlay();
-	
+	playerController = UGameplayStatics::GetPlayerController(GetWorld(), 0);
+	const FVector2D ViewportSize = FVector2D(GEngine->GameViewport->Viewport->GetSizeXY());
+	ScreenAimPos = FVector2D(ViewportSize.X / 2, ViewportSize.Y / 2);
+	InteractionRange = 2000.f;
+	if (WidgetClass != nullptr)
+	{
+		PlayerUI = Cast<UMainCharacterWidget>(CreateWidget(GetWorld(), WidgetClass));
+		if (PlayerUI != nullptr)
+		{
+			PlayerUI->GetPressFKey()->SetVisibility(ESlateVisibility::Hidden);
+			PlayerUI->AddToViewport();
+		}
+	}
 }
 
 // Called every frame
 void AMainCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+
+	FVector OutWorldLocation;
+	FVector OutWorldDirection;
+	bool bAim = playerController->DeprojectScreenPositionToWorld(ScreenAimPos.X, ScreenAimPos.Y, OutWorldLocation, OutWorldDirection);
+	FHitResult HitResult;
+	FCollisionQueryParams Params(NAME_None, false, this);
+	if (!bAim)
+		return;
+
+	bool bHitResult = GetWorld()->LineTraceSingleByChannel(
+		HitResult,
+		OutWorldLocation,
+		(OutWorldDirection * InteractionRange) + OutWorldLocation,
+		ECollisionChannel::ECC_GameTraceChannel1,
+		Params);
+
+	FColor DrawColor;
+	if (bHitResult)
+		DrawColor = FColor::Green;
+	else
+		DrawColor = FColor::Red;
+	DrawDebugLine(
+		GetWorld(),
+		OutWorldLocation,
+		(OutWorldDirection * InteractionRange) + OutWorldLocation,
+		DrawColor, false, 1, 0, 0.1);
+	
+	if (bHitResult) // 상호작용하는 오브젝트와 에임이 맞았을경우
+	{
+		//delegate 해서 이벤트로하면 더 효율이 좋을듯
+		//hit된 액터 스스로 자기가 맞았다는걸 인식하고 하이라이트
+		//F키를 누르면
+		//TODO
+		//InteractionObject cpp하나 만들어서 가면이나 사다리 블루프린트들이 상속을받음
+		//
+		InteractionObject = Cast<AInteractionObject>(HitResult.Actor);
+		if (InteractionObject)
+		{
+			InteractionObject->StartHighlight();
+			PlayerUI->GetPressFKey()->SetVisibility(ESlateVisibility::Visible);
+		}
+	}
+	else
+	{
+		if (InteractionObject)
+		{
+			InteractionObject->EndHighlight();
+			InteractionObject = nullptr;
+			PlayerUI->GetPressFKey()->SetVisibility(ESlateVisibility::Hidden);
+		}
+	}
 
 }
 
@@ -66,10 +137,13 @@ void AMainCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompo
 {
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
 
+	PlayerInputComponent->BindAction(TEXT("Interaction"), IE_Pressed, this, &AMainCharacter::Interaction);
+
 	PlayerInputComponent->BindAxis(TEXT("UpDown"), this, &AMainCharacter::UpDown);
 	PlayerInputComponent->BindAxis(TEXT("LeftRight"), this, &AMainCharacter::LeftRight);
 	PlayerInputComponent->BindAxis(TEXT("Turn"), this, &AMainCharacter::Turn);
 	PlayerInputComponent->BindAxis(TEXT("LookUp"), this, &AMainCharacter::LookUp);
+
 }
 
 //void AMainCharacter::PostInitializeComponents()
@@ -103,3 +177,10 @@ void AMainCharacter::LookUp(float Value)
 	AddControllerPitchInput(Value);
 }
 
+void AMainCharacter::Interaction()
+{
+	if (InteractionObject)
+	{
+		InteractionObject->Interaction();
+	}
+}

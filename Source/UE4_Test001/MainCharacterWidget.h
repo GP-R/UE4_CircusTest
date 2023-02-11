@@ -4,8 +4,8 @@
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
+#include "Components/TextBlock.h"
 #include "MainCharacterWidget.generated.h"
-
 /**
  * 
  */
@@ -15,6 +15,8 @@ class UE4_TEST001_API UMainCharacterWidget : public UUserWidget
 	GENERATED_BODY()
 	
 private:
-	//UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Pawn, Meta = (AllowPrivateAccess = true))
-
+	UPROPERTY(meta = (BindWidget))
+	UTextBlock* PressFKey;
+public:
+	UTextBlock* GetPressFKey();
 };

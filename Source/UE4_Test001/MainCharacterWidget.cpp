@@ -3,3 +3,7 @@
 
 #include "MainCharacterWidget.h"
 
+UTextBlock* UMainCharacterWidget::GetPressFKey()
+{
+	return PressFKey;
+}
